@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main       # 同步 upstream 到 main 分支时自动触发
+      - main
     tags:
-      - 'v*'       # 同步到版本标签时也会自动触发
+      - 'v*'
 
 permissions:
-  contents: read
+  contents: write # 必须赋予写权限才能创建 Release
 
 jobs:
   build:
@@ -39,19 +39,39 @@ jobs:
         run: |
           go tool mygo build -platform "${{ matrix.platform }}"
 
+      # 将各架构子文件夹中的安装包提取平铺出来
+      - name: Flatten packages
+        run: |
+          mkdir -p dist
+          find build -type f \( -name "*.deb" -o -name "*.exe" -o -name "*.dmg" -o -name "*.tar.gz" -o -name "SHA256SUMS" \) -exec cp {} dist/ \;
+
+      # 上传临时产物供最后的发布任务使用
       - name: Save build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.name }}
-          path: |
-            build/SHA256SUMS
-            build/*/*.dmg
-            build/*/*-setup-*.exe
-            build/*/*.deb
-            build/*/*.tar.gz
-            build/*/*.delta
-            build/*/update-*.json
-            build/*/install.sh
-            build/*/install.ps1
+          name: packages-${{ matrix.name }}
+          path: dist/*
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 1
+
+  # 汇聚三端产物并发布到 Releases
+  publish:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-packages
+          pattern: packages-*
+          merge-multiple: true
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}
+          name: ${{ github.ref_type == 'tag' && github.ref_name || 'Latest Auto Build' }}
+          files: all-packages/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
