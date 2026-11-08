@@ -2,9 +2,9 @@ name: Upstream Sync
 
 on:
   schedule:
-    # 每 2 小时自动检查一次上游是否有更新（按需调整 cron）
+    # 每 2 小时自动检查一次上游是否有更新
     - cron: '0 */2 * * *'
-  # 也支持手动随时点按钮检查同步
+  # 支持在 Actions 页面手动点击触发
   workflow_dispatch:
 
 jobs:
@@ -12,17 +12,15 @@ jobs:
     name: Sync latest commits from upstream repo
     runs-on: ubuntu-latest
     steps:
+      # 关键步骤：先检出本地仓库代码与 Git 历史
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+
+      # 同步上游仓库更新
       - name: Sync upstream changes
         id: sync
         uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
         with:
           upstream_sync_repo: Amamiya23/mygo-qyin
           upstream_sync_branch: main
-          target_sync_branch: main
-          # 使用带有触发后续 Workflow 权限的 Token
-          target_repo_token: ${{ secrets.SYNC_PAT || secrets.GITHUB_TOKEN }}
-          test_mode: false
-
-      - name: Check sync result
-        if: steps.sync.outputs.has_new_commits == 'true'
-        run: echo "New commits synced from upstream!"
+          target_sync_branch
