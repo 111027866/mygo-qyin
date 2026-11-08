@@ -9,19 +9,19 @@ on:
       - 'v*'
 
 permissions:
-  contents: write # 必须赋予写权限才能创建 Release
+  contents: write
 
 jobs:
   build:
     name: ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest # 两者都在 ubuntu 上交叉编译即可，无需 mac 机器
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: macOS, os: macos-latest, platform: "darwin/arm64,darwin/amd64" }
-          - { name: Windows, os: ubuntu-latest, platform: "windows/amd64,windows/arm64" }
-          - { name: Linux, os: ubuntu-latest, platform: "linux/amd64,linux/arm64" }
+          # 仅保留 win-amd64 与 linux-arm64
+          - { name: Windows-amd64, platform: "windows/amd64" }
+          - { name: Linux-arm64, platform: "linux/arm64" }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -30,7 +30,7 @@ jobs:
           cache: false
 
       - name: Install NSIS
-        if: matrix.name == 'Windows'
+        if: matrix.name == 'Windows-amd64'
         run: sudo apt-get update && sudo apt-get install -y nsis
 
       - name: Build packages
@@ -39,39 +39,11 @@ jobs:
         run: |
           go tool mygo build -platform "${{ matrix.platform }}"
 
-      # 将各架构子文件夹中的安装包提取平铺出来
+      # 仅提取 .deb 和 .exe 安装包（连同 SHA256SUMS 校验文件）
       - name: Flatten packages
         run: |
           mkdir -p dist
-          find build -type f \( -name "*.deb" -o -name "*.exe" -o -name "*.dmg" -o -name "*.tar.gz" -o -name "SHA256SUMS" \) -exec cp {} dist/ \;
+          find build -type f \( -name "*.deb" -o -name "*-setup-*.exe" -o -name "SHA256SUMS" \) -exec cp {} dist/ \;
 
-      # 上传临时产物供最后的发布任务使用
       - name: Save build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: packages-${{ matrix.name }}
-          path: dist/*
-          if-no-files-found: warn
-          retention-days: 1
-
-  # 汇聚三端产物并发布到 Releases
-  publish:
-    name: Publish Release
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: all-packages
-          pattern: packages-*
-          merge-multiple: true
-
-      - name: Create or Update GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}
-          name: ${{ github.ref_type == 'tag' && github.ref_name || 'Latest Auto Build' }}
-          files: all-packages/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/upload-artifact@v
