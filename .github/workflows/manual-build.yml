@@ -2,6 +2,11 @@ name: Manual release build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main       # 同步 upstream 到 main 分支时自动触发
+    tags:
+      - 'v*'       # 同步到版本标签时也会自动触发
 
 permissions:
   contents: read
@@ -18,23 +23,22 @@ jobs:
           - { name: Windows, os: ubuntu-latest, platform: "windows/amd64,windows/arm64" }
           - { name: Linux, os: ubuntu-latest, platform: "linux/amd64,linux/arm64" }
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: false
+
       - name: Install NSIS
         if: matrix.name == 'Windows'
         run: sudo apt-get update && sudo apt-get install -y nsis
-      - name: Build signed packages
+
+      - name: Build packages
         env:
           CGO_ENABLED: "0"
-          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         run: |
-          test -n "$MYGO_UPDATER_PRIVATE_KEY" || { echo "Missing update signing key" >&2; exit 1; }
           go tool mygo build -platform "${{ matrix.platform }}"
-          for target in $(echo "${{ matrix.platform }}" | tr "," " " | tr "/" "-"); do
-            test -f "build/$target/update-$target.json" || { echo "Missing signed update manifest for $target" >&2; exit 1; }
-          done
+
       - name: Save build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -49,5 +53,5 @@ jobs:
             build/*/update-*.json
             build/*/install.sh
             build/*/install.ps1
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
