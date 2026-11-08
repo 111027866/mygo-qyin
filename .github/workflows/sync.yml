@@ -23,4 +23,10 @@ jobs:
         with:
           upstream_sync_repo: Amamiya23/mygo-qyin
           upstream_sync_branch: main
-          target_sync_branch
+          target_sync_branch: main
+          target_repo_token: ${{ secrets.SYNC_PAT || secrets.GITHUB_TOKEN }}
+          test_mode: false
+
+      - name: Check sync result
+        if: steps.sync.outputs.has_new_commits == 'true'
+        run: echo "New commits synced from upstream!"
