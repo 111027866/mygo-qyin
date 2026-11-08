@@ -46,4 +46,4 @@ jobs:
           find build -type f \( -name "*.deb" -o -name "*-setup-*.exe" -o -name "SHA256SUMS" \) -exec cp {} dist/ \;
 
       - name: Save build artifacts
-        uses: actions/upload-artifact@v
+        uses: actions/upload-artifact@v4
